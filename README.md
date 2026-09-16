@@ -14,36 +14,43 @@ A documentation of my dedicated home-lab environment designed for practical impl
 
 | Host / Node | Hardware Specs | OS / Hypervisor | Role / Workloads |
 | :--- | :--- | :--- | :--- |
-| **Primary Node** | Lenovo ThinkCentre M720q (Intel Core i5-8500T) | **Proxmox VE** | Virtualization Host, OPNsense Firewall/Routing, Docker VMs & LXC Containers |
-| **Storage & Edge Node** | Raspberry Pi (24/7 low-power operation) | **Linux** | Lightweight Edge Services, File Storage & Network Shares (8 TB HDD) |
-| **Networking** | Managed Switch / OPNsense Routing | — | IEEE 802.1Q VLAN Tagging & Inter-VLAN Routing |
+| **Primary Node** | Lenovo ThinkCentre M720q (Intel Core i5-8500T, 6C/6T) | **Proxmox VE 9.2** | Virtualization Host, OPNsense Firewall/Router (VM 111), LXC Containers & Docker VMs |
+| **Edge & Uplink** | AVM FRITZ!Box (`192.168.178.1`) | FRITZ!OS | WAN Gateway, Upstream Internet Router |
+| **Storage & Edge Node** | Raspberry Pi | **Linux** | Lightweight Edge Services, File Storage & Network Shares (8 TB HDD) |
+| **Virtual Switching** | Linux Bridge (`vmbr0`) & Virtual Interfaces | Proxmox / OPNsense | IEEE 802.1Q VLAN Tagging (`vtnet0`–`vtnet4`) & Inter-VLAN Routing |
 
 ---
 
 ## 🛡️ Network Segmentation & Security Zones
 
-The network is segregated into isolated zones adhering to the principle of **least privilege**:
+The internal network is segmented into isolated broadcast domains using strict stateful firewall policies and RFC 1918 filtering:
 
-| VLAN ID | Subnet | Zone Name | Description & Policy |
-| :--- | :--- | :--- | :--- |
-| **VLAN 10** | `192.168.10.0/24` | **Management** | Dedicated out-of-band administration (Proxmox GUI, SSH, Switch Web UI). Fully isolated. |
-| **VLAN 20** | `192.168.20.0/24` | **Trusted LAN** | Workstation & daily-use clients. Access to local services and WAN. |
-| **VLAN 30** | `192.168.30.0/24` | **Server / Lab** | Hosting containerized services, storage shares, and lab environments. |
-| **VLAN 40** | `192.168.40.0/24` | **DMZ / Testing** | Isolated environment for testing and vulnerability analysis. Zero lateral movement to LAN/Management. |
-| **VLAN 50** | `192.168.50.0/24` | **IoT / Guest** | Smart-home & untrusted devices. Internet-only access with strict client isolation. |
+| Interface / VLAN | Subnet | Gateway | DHCP Range | Zone Name | Description & Security Policy |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **WAN** (`vtnet0`) | `192.168.178.0/24` | `192.168.178.1` | Static (`.140`) | **WAN Uplink** | Upstream link to FRITZ!Box. Dedicated HTTPS rule configured for secure Web-GUI administration. |
+| **LAN / VLAN 10** (`vtnet1`) | `10.0.10.0/24` | `10.0.10.1` | `.10` – `.245` | **Trusted LAN** | Admin workstations and trusted clients. Full access to WAN and unilateral routing to isolated segments. |
+| **VLAN 20** (`vtnet2`) | `10.0.20.0/24` | `10.0.20.1` | `.100` – `.200` | **DMZ** | Public-facing services & reverse proxies (e.g., Nginx Proxy Manager). Isolated from internal networks. |
+| **VLAN 30** (`vtnet3`) | `10.0.30.0/24` | `10.0.30.1` | `.100` – `.200` | **IoT** | Smart-home infrastructure (Home Assistant, bridges, IoT endpoints). Internet access allowed; RFC 1918 denied. |
+| **VLAN 40** (`vtnet4`) | `10.0.40.0/24` | `10.0.40.1` | `.100` – `.200` | **Sandbox** | Ephemeral testing environments, malware/script analysis, and lab experiments. Zero lateral movement. |
 
 ---
 
 ## 🔒 Security Implementations
 
-* **DNS-Layer Security:** Centralized DNS sinkhole via **AdGuard Home** providing network-wide telemetry and malicious domain filtering.
-* **Firewalling & Traffic Control:** Strict default-deny rule base managed via **OPNsense**. Inter-VLAN communication is explicitly whitelisted per port and protocol.
-* **Service Isolation:** Separation of concerns using Docker containers and lightweight LXCs to minimize attack surface.
+* **RFC 1918 Isolation (`Private_Netze`):** Central firewall alias defined across `10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16`.
+* **Inverted Egress Filtering (`!Private_Netze`):** Isolated segments (DMZ, IoT, Sandbox) can route outbound traffic exclusively to public WAN destinations while dropping all inter-segment and FRITZ!Box-bound lateral packets.
+* **Controlled Core Services:** Explicit rule allowing TCP/UDP port 53 (DNS) directly to `This Firewall` (`OPNsense`) while dropping unauthorized internal traffic.
+* **Stateful Inter-VLAN Administration:** Trusted LAN initiates stateful sessions into DMZ, IoT, and Sandbox; return packets are allowed dynamically while unsolicited connections back to LAN remain strictly blocked.
+* **Verified Containment:** Validated via isolated container testing (LXC `120 (test-web)`) confirming zero packet loss to WAN DNS (`google.com`) and 100% packet drop against host gateways (`192.168.178.1`).
 
 ---
 
 ## 📌 Roadmap & Future Enhancements
 
-- [ ] Centralized log aggregation and monitoring (Grafana / Syslog)
-- [ ] Implementation of a SIEM solution for threat detection (e.g., Wazuh)
-- [ ] Automated configuration backups for Proxmox and firewall state
+- [x] Hypervisor-level VLAN tagging and network bridge configuration
+- [x] OPNsense multi-interface routing and isolated DHCP pools
+- [x] RFC 1918 firewall isolation matrix and container verification
+- [ ] Migration of existing workloads (Nginx Proxy Manager to DMZ, Home Assistant to IoT)
+- [ ] Centralized DNS sinkhole via AdGuard Home
+- [ ] Centralized log aggregation and telemetry (Grafana / Prometheus / Syslog)
+- [ ] Implementation of a SIEM solution for intrusion detection (Wazuh / CrowdSec)
