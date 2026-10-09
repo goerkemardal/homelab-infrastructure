@@ -35,18 +35,6 @@ The internal network is segmented into isolated broadcast domains using strict s
 
 ---
 
-## 🔒 Security Implementations
-
-* **RFC 1918 Isolation (`Private_Netze`):** Central firewall alias defined across `10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16`.
-* **Inverted Egress Filtering (`!Private_Netze`):** Isolated segments (DMZ, IoT, Sandbox) can route outbound traffic exclusively to public WAN destinations while dropping all inter-segment and FRITZ!Box-bound lateral packets.
-* **Inter-VLAN Service Pinhole:** Granular firewall rule on VLAN 20 allowing DMZ Ingress (`10.0.20.100`) to initiate stateful TCP sessions strictly to Jellyfin (`10.0.10.101:8096`) in VLAN 10, maintaining full isolation from all other LAN endpoints.
-* **Controlled Core Services:** Explicit rule allowing TCP/UDP port 53 (DNS) directly to `This Firewall` (`OPNsense`) while dropping unauthorized internal traffic.
-* **Stateful Inter-VLAN Administration:** Trusted LAN initiates stateful sessions into DMZ, IoT, and Sandbox; return packets are allowed dynamically while unsolicited connections back to LAN remain strictly blocked.
-* **Upstream Static Routing:** Configured static IPv4 route on FRITZ!Box (`10.0.0.0/16` via `192.168.178.140`) to enable seamless two-way routing for upstream clients to downstream VLANs without double NAT.
-* **Verified Containment:** Validated via isolated container testing (LXC `120 (test-web)`) confirming zero packet loss to WAN DNS (`google.com`) and 100% packet drop against host gateways (`192.168.178.1`).
-
----
-
 ## 📌 Roadmap & Future Enhancements
 
 - [x] Hypervisor-level VLAN tagging and network bridge configuration
